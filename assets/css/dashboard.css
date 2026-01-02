@@ -1,0 +1,42 @@
+/* Stat Cards */
+.stat-card {
+    color: #fff;
+    padding: 20px;
+    border-radius: 10px;
+    transition: all 0.3s ease-in-out;
+    cursor: default;
+}
+.stat-card h6 {
+    font-weight: 500;
+}
+.stat-card h2 {
+    font-size: 2rem;
+    margin-top: 10px;
+}
+.stat-card:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 10px 20px rgba(0,0,0,0.2);
+}
+
+/* Colors */
+.stat-card.purple { background: #6f42c1; }
+.stat-card.green { background: #198754; }
+.stat-card.orange { background: #fd7e14; }
+.stat-card.blue { background: #0d6efd; }
+
+/* Topbar */
+.topbar {
+    background: #f8f9fa;
+    padding: 15px;
+    border-radius: 10px;
+}
+
+/* List Group for Calendar */
+.list-group-item-success { background-color: #d1e7dd !important; }
+.list-group-item-warning { background-color: #fff3cd !important; }
+.list-group-item-secondary { background-color: #e2e3e5 !important; }
+.list-group-item-light { background-color: #f8f9fa !important; }
+
+@media (max-width: 576px){
+    .stat-card h2 { font-size: 1.5rem; }
+}
