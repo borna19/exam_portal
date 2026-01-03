@@ -40,3 +40,17 @@
 @media (max-width: 576px){
     .stat-card h2 { font-size: 1.5rem; }
 }
+
+/* Layout: offset content from fixed sidebar */
+body { margin: 0; }
+.main-content {
+    margin-left: 220px; /* same as .sidebar width */
+    padding: 20px;
+    transition: margin-left 0.2s ease;
+}
+
+/* On smaller screens, stack sidebar above content */
+@media (max-width: 768px) {
+    .sidebar { position: relative; width: 100%; height: auto; }
+    .main-content { margin-left: 0; }
+}
