@@ -1,237 +1,414 @@
 <?php
 session_start();
-include "../includes/db.php";
+include '../includes/db.php';
 
-/* =====================
-   ADMIN AUTH CHECK
-===================== */
-if (!isset($_SESSION['admin_id'])) {
-    header("Location: ../index.php");
-    exit;
+$currentPage = 'questions';
+$isAdmin = isset($_SESSION['admin_id']);
+
+$exams = $conn->query("SELECT id, title FROM exams");
+
+$message = "";
+
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['add_question'])) {
+    $exam_id = (int)$_POST['exam_id'];
+    $question = $_POST['question'];
+    $opt_a = $_POST['opt_a'];
+    $opt_b = $_POST['opt_b'];
+    $opt_c = $_POST['opt_c'];
+    $opt_d = $_POST['opt_d'];
+    $correct = $_POST['correct'];
+
+    $stmt = $conn->prepare(
+        "INSERT INTO questions 
+        (exam_id, question, opt_a, opt_b, opt_c, opt_d, correct)
+        VALUES (?, ?, ?, ?, ?, ?, ?)"
+    );
+    $stmt->bind_param(
+        "issssss",
+        $exam_id,
+        $question,
+        $opt_a,
+        $opt_b,
+        $opt_c,
+        $opt_d,
+        $correct
+    );
+    if ($stmt->execute()) $message = "Question added successfully!";
 }
 
-/* =====================
-   ADD QUESTION
-===================== */
-if (isset($_POST['add_question'])) {
+$questions = $conn->query("
+    SELECT q.id, q.question, q.opt_a, q.opt_b, q.opt_c, q.opt_d, q.correct, e.title AS exam_title
+    FROM questions q
+    JOIN exams e ON e.id = q.exam_id
+    ORDER BY q.id DESC
+");
 
-    $exam_id = (int)$_POST['exam_id'];
-    $question = trim($_POST['question']);
-    $type = $_POST['question_type'];
-
-    if ($type === 'MCQ') {
-
-        $opt_a = $_POST['opt_a'];
-        $opt_b = $_POST['opt_b'];
-        $opt_c = $_POST['opt_c'];
-        $opt_d = $_POST['opt_d'];
-        $correct = $_POST['correct_option'];
-
-        $stmt = $conn->prepare("
-            INSERT INTO questions
-            (exam_id, question, question_type, option_a, option_b, option_c, option_d, correct_option)
-            VALUES (?,?,?,?,?,?,?,?)
-        ");
-        $stmt->bind_param(
-            "isssssss",
-            $exam_id,
-            $question,
-            $type,
-            $opt_a,
-            $opt_b,
-            $opt_c,
-            $opt_d,
-            $correct
-        );
-        $stmt->execute();
-        $stmt->close();
-
-    } else { // SAQ
-
-        $correct_text = trim($_POST['correct_text']);
-
-        $stmt = $conn->prepare("
-            INSERT INTO questions
-            (exam_id, question, question_type, correct_text)
-            VALUES (?,?,?,?)
-        ");
-        $stmt->bind_param(
-            "isss",
-            $exam_id,
-            $question,
-            $type,
-            $correct_text
-        );
-        $stmt->execute();
-        $stmt->close();
-    }
-
+/* DELETE QUESTION (SAME PAGE) */
+if (isset($_POST['delete_question'])) {
+    $id = (int)$_POST['question_id'];
+    $conn->query("DELETE FROM questions WHERE id = $id");
     header("Location: manage_questions.php");
     exit;
 }
 
-/* =====================
-   DELETE QUESTION
-===================== */
-if (isset($_POST['delete_question'])) {
-    $id = (int)$_POST['delete_id'];
-    $conn->query("DELETE FROM questions WHERE id=$id");
-}
-
-/* =====================
-   FETCH EXAMS
-===================== */
-$exams = $conn->query("SELECT * FROM exams ORDER BY exam_name");
-
-/* =====================
-   FETCH QUESTIONS
-===================== */
-$questions = $conn->query("
-    SELECT q.*, e.exam_name
-    FROM questions q
-    JOIN exams e ON q.exam_id = e.id
-    ORDER BY q.id DESC
-");
 ?>
 
 <!DOCTYPE html>
-<html>
-<head>
-<title>Manage Questions</title>
-<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+<html lang="en">
 
-<style>
-body { background:#f4f6f9; }
-.main { margin-left:220px; padding:25px; }
-.card { border-radius:14px; }
-.hidden { display:none; }
-</style>
+<head>
+    <meta charset="UTF-8">
+    <title>Manage Questions</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+
+    <style>
+        body {
+            background: #f0f2f5;
+            font-family: 'Segoe UI', sans-serif;
+            margin: 0;
+        }
+
+        /* Wrapper */
+        .wrapper {
+            display: flex;
+            min-height: 100vh;
+        }
+
+        /* Sidebar */
+        .sidebar {
+            position: fixed;
+            left: 0;
+            top: 0;
+            width: 220px;
+            height: 100%;
+            background: #2e7d32;
+            color: #fff;
+            padding-top: 25px;
+        }
+
+        .sidebar h2 {
+            text-align: center;
+            margin-bottom: 30px;
+            font-size: 22px;
+            font-weight: 600;
+        }
+
+        .sidebar a {
+            display: block;
+            padding: 12px 20px;
+            color: #fff;
+            text-decoration: none;
+            border-radius: 6px;
+            margin-bottom: 6px;
+            transition: 0.2s;
+        }
+
+        .sidebar a:hover,
+        .sidebar a.active {
+            background: #1b5e20;
+        }
+
+        /* Main Content */
+        .main {
+            flex: 1;
+            padding: 30px;
+            margin-left: 220px;
+        }
+
+        /* Page Title */
+        .page-title {
+            font-size: 28px;
+            font-weight: 600;
+            margin-bottom: 25px;
+        }
+
+        /* Card */
+        .card {
+            background: #fff;
+            border-radius: 12px;
+            padding: 25px;
+            margin-bottom: 25px;
+            box-shadow: 0 8px 20px rgba(0, 0, 0, 0.05);
+            transition: 0.3s;
+        }
+
+        .card:hover {
+            box-shadow: 0 12px 30px rgba(0, 0, 0, 0.08);
+        }
+
+        /* Form */
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        label {
+            font-weight: 600;
+            margin-bottom: 8px;
+            display: block;
+        }
+
+        input,
+        select,
+        textarea {
+            width: 100%;
+            padding: 12px;
+            border-radius: 8px;
+            border: 1px solid #ddd;
+            font-size: 14px;
+            transition: 0.2s;
+        }
+
+        input:focus,
+        select:focus,
+        textarea:focus {
+            border-color: #10b981;
+            outline: none;
+        }
+
+        textarea {
+            height: 100px;
+            resize: none;
+        }
+
+        .options {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 12px;
+        }
+
+        .btn {
+            background: #10b981;
+            color: #fff;
+            border: none;
+            padding: 12px 25px;
+            border-radius: 8px;
+            font-size: 15px;
+            cursor: pointer;
+            transition: 0.2s;
+        }
+
+        .btn:hover {
+            background: #059669;
+        }
+
+        /* Success Message */
+        .success {
+            background: #d1fae5;
+            color: #065f46;
+            padding: 12px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            font-weight: 500;
+        }
+
+        /* Table */
+        .table th,
+        .table td {
+            vertical-align: middle;
+        }
+
+        .table thead {
+            background: #10b981;
+            color: #fff;
+        }
+
+        .table tbody tr:hover {
+            background: #f3fdf7;
+        }
+
+        .action-btn {
+            margin-right: 5px;
+            border-radius: 6px;
+        }
+
+        /* Responsive */
+        @media(max-width:768px) {
+            .wrapper {
+                flex-direction: column;
+            }
+
+            .main {
+                margin-left: 0;
+                padding: 20px;
+            }
+        }
+    </style>
 </head>
 
 <body>
-<?php include "../includes/sidebar.php"; ?>
+    <div class="wrapper">
 
-<div class="main">
-<h4 class="fw-bold mb-3">📝 Manage Questions</h4>
+        <!-- Sidebar -->
+        <div class="sidebar">
+            <h2>Exam Portal</h2>
+            <a href="dashboard.php">Dashboard</a>
+            <?php if ($isAdmin) { ?>
+                <a href="manage_exam.php">Manage Exams</a>
+                <a href="manage_questions.php" class="active">Questions</a>
+                <a href="students.php">Students</a>
+                <a href="results.php">Results</a>
+                <a href="logout.php" onclick="return confirm('Are you sure you want to logout?')">Logout</a>
+            <?php } else { ?>
+                <a href="../index.php">Login</a>
+            <?php } ?>
+        </div>
 
-<!-- ADD QUESTION -->
-<div class="card p-4 mb-4 shadow-sm">
-<form method="POST">
+        <!-- Main Content -->
+        <div class="main">
+            <div class="page-title">Manage Questions</div>
 
-<select name="exam_id" class="form-select mb-2" required>
-<option value="">Select Exam</option>
-<?php while($ex = $exams->fetch_assoc()) { ?>
-<option value="<?= $ex['id'] ?>"><?= $ex['exam_name'] ?></option>
-<?php } ?>
-</select>
+            <!-- Add Question Form -->
+            <div class="card">
+                <?php if ($message): ?>
+                    <div class="success"><?= $message ?></div>
+                <?php endif; ?>
 
-<textarea name="question" class="form-control mb-2"
-placeholder="Enter question" required></textarea>
+                <form method="post">
+                    <div class="form-group">
+                        <label>Select Exam</label>
+                        <select name="exam_id" required>
+                            <?php while ($row = $exams->fetch_assoc()): ?>
+                                <option value="<?= $row['id'] ?>"><?= htmlspecialchars($row['title']) ?></option>
+                            <?php endwhile; ?>
+                        </select>
+                    </div>
 
-<!-- QUESTION TYPE -->
-<select name="question_type" id="questionType"
-class="form-select mb-3" required>
-<option value="MCQ">MCQ</option>
-<option value="SAQ">Short Answer (SAQ)</option>
-</select>
+                    <div class="form-group">
+                        <label>Question</label>
+                        <textarea name="question" required></textarea>
+                    </div>
 
-<!-- MCQ OPTIONS -->
-<div id="mcqBox">
-<input type="text" name="opt_a" class="form-control mb-2" placeholder="Option A">
-<input type="text" name="opt_b" class="form-control mb-2" placeholder="Option B">
-<input type="text" name="opt_c" class="form-control mb-2" placeholder="Option C">
-<input type="text" name="opt_d" class="form-control mb-2" placeholder="Option D">
+                    <div class="form-group">
+                        <label>Options</label>
+                        <div class="options">
+                            <input type="text" name="opt_a" placeholder="Option A" required>
+                            <input type="text" name="opt_b" placeholder="Option B" required>
+                            <input type="text" name="opt_c" placeholder="Option C" required>
+                            <input type="text" name="opt_d" placeholder="Option D" required>
+                        </div>
+                    </div>
 
-<select name="correct_option" class="form-select mb-2">
-<option value="">Correct Option</option>
-<option value="A">Option A</option>
-<option value="B">Option B</option>
-<option value="C">Option C</option>
-<option value="D">Option D</option>
-</select>
-</div>
+                    <div class="form-group">
+                        <label>Correct Answer</label>
+                        <select name="correct">
+                            <option value="A">A</option>
+                            <option value="B">B</option>
+                            <option value="C">C</option>
+                            <option value="D">D</option>
+                        </select>
+                    </div>
 
-<!-- SAQ ANSWER -->
-<div id="saqBox" class="hidden">
-<input type="text" name="correct_text"
-class="form-control mb-2"
-placeholder="Correct Answer (Short)">
-</div>
+                    <button type="submit" name="add_question" class="btn">Add Question</button>
+                </form>
+            </div>
 
-<button type="submit" name="add_question"
-class="btn btn-success w-100">
-Add Question
-</button>
+            <!-- Questions Table -->
+            <div class="card">
+                <h4>All Questions</h4>
+                <div class="table-responsive mt-3">
+                    <table class="table table-bordered align-middle">
+                        <thead>
+                            <tr>
+                                <th>#</th>
+                                <th>Exam</th>
+                                <th>Question</th>
+                                <th>Options</th>
+                                <th>Correct</th>
+                                <th>Action</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <?php if ($questions->num_rows > 0): $i = 1;
+                                while ($q = $questions->fetch_assoc()): ?>
+                                    <tr>
+                                        <td><?= $i++ ?></td>
+                                        <td><?= htmlspecialchars($q['exam_title']) ?></td>
+                                        <td><?= htmlspecialchars($q['question']) ?></td>
+                                        <td>
+                                            A: <?= htmlspecialchars($q['opt_a']) ?><br>
+                                            B: <?= htmlspecialchars($q['opt_b']) ?><br>
+                                            C: <?= htmlspecialchars($q['opt_c']) ?><br>
+                                            D: <?= htmlspecialchars($q['opt_d']) ?>
+                                        </td>
+                                        <td><?= $q['correct'] ?></td>
+                                        <td>
+                                            <!-- Edit Button triggers modal -->
+                                            <button class="btn btn-sm btn-primary action-btn" data-bs-toggle="modal" data-bs-target="#editModal<?= $q['id'] ?>">Edit</button>
 
-</form>
-</div>
+                                            <!-- Delete Button (direct) -->
+                                            <form method="post" style="display:inline;">
+                                                <input type="hidden" name="question_id" value="<?= $q['id'] ?>">
+                                                <button type="submit"
+                                                    name="delete_question"
+                                                    class="btn btn-sm btn-danger action-btn"
+                                                    onclick="return confirm('Delete this question?')">
+                                                    Delete
+                                                </button>
+                                            </form>
 
-<!-- QUESTION LIST -->
-<div class="card shadow-sm">
-<div class="card-body">
-<table class="table table-bordered align-middle">
-<thead>
-<tr>
-<th>ID</th>
-<th>Exam</th>
-<th>Type</th>
-<th>Question</th>
-<th>Answer</th>
-<th>Action</th>
-</tr>
-</thead>
-<tbody>
+                                        </td>
+                                    </tr>
 
-<?php while($row = $questions->fetch_assoc()) { ?>
-<tr>
-<td><?= $row['id'] ?></td>
-<td><?= $row['exam_name'] ?></td>
-<td>
-<span class="badge <?= $row['question_type']=='MCQ'?'bg-primary':'bg-warning text-dark' ?>">
-<?= $row['question_type'] ?>
-</span>
-</td>
-<td><?= htmlspecialchars($row['question']) ?></td>
-<td>
-<?php
-if (isset($row['question_type']) && $row['question_type'] === 'MCQ') {
-    echo htmlspecialchars($row['correct_option'] ?? '');
-} else {
-    echo htmlspecialchars($row['correct_text'] ?? '');
-}
-?>
-</td>
-<td>
-<form method="POST" class="d-inline">
-<input type="hidden" name="delete_id" value="<?= $row['id'] ?>">
-<button name="delete_question"
-class="btn btn-sm btn-danger"
-onclick="return confirm('Delete this question?')">
-Delete
-</button>
-</form>
-</td>
-</tr>
-<?php } ?>
+                                    <!-- Edit Modal -->
+                                    <div class="modal fade" id="editModal<?= $q['id'] ?>" tabindex="-1" aria-labelledby="editModalLabel<?= $q['id'] ?>" aria-hidden="true">
+                                        <div class="modal-dialog modal-lg">
+                                            <div class="modal-content">
+                                                <form method="post">
+                                                    <input type="hidden" name="question_id" value="<?= $q['id'] ?>">
 
-</tbody>
-</table>
-</div>
-</div>
+                                                    <div class="modal-header">
+                                                        <h5 class="modal-title" id="editModalLabel<?= $q['id'] ?>">Edit Question</h5>
+                                                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                                                    </div>
+                                                    <div class="modal-body">
+                                                        <div class="form-group mb-3">
+                                                            <label>Question</label>
+                                                            <textarea name="question" class="form-control" required><?= htmlspecialchars($q['question']) ?></textarea>
+                                                        </div>
+                                                        <div class="form-group mb-3">
+                                                            <label>Options</label>
+                                                            <div class="row g-2">
+                                                                <div class="col"><input type="text" name="opt_a" class="form-control" value="<?= htmlspecialchars($q['opt_a']) ?>" required></div>
+                                                                <div class="col"><input type="text" name="opt_b" class="form-control" value="<?= htmlspecialchars($q['opt_b']) ?>" required></div>
+                                                                <div class="col"><input type="text" name="opt_c" class="form-control" value="<?= htmlspecialchars($q['opt_c']) ?>" required></div>
+                                                                <div class="col"><input type="text" name="opt_d" class="form-control" value="<?= htmlspecialchars($q['opt_d']) ?>" required></div>
+                                                            </div>
+                                                        </div>
+                                                        <div class="form-group mb-3">
+                                                            <label>Correct Answer</label>
+                                                            <select name="correct" class="form-control">
+                                                                <option value="A" <?= $q['correct'] == 'A' ? 'selected' : '' ?>>A</option>
+                                                                <option value="B" <?= $q['correct'] == 'B' ? 'selected' : '' ?>>B</option>
+                                                                <option value="C" <?= $q['correct'] == 'C' ? 'selected' : '' ?>>C</option>
+                                                                <option value="D" <?= $q['correct'] == 'D' ? 'selected' : '' ?>>D</option>
+                                                            </select>
+                                                        </div>
+                                                    </div>
+                                                    <div class="modal-footer">
+                                                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                                                        <button type="submit" name="update_question" class="btn btn-success">
+                                                            Save Changes
+                                                        </button>
 
-</div>
+                                                    </div>
+                                                </form>
+                                            </div>
+                                        </div>
+                                    </div>
 
-<script>
-document.getElementById('questionType').addEventListener('change', function(){
-    if(this.value === 'SAQ'){
-        document.getElementById('mcqBox').classList.add('hidden');
-        document.getElementById('saqBox').classList.remove('hidden');
-    } else {
-        document.getElementById('mcqBox').classList.remove('hidden');
-        document.getElementById('saqBox').classList.add('hidden');
-    }
-});
-</script>
+                                <?php endwhile;
+                            else: ?>
+                                <tr>
+                                    <td colspan="6" class="text-center">No questions found.</td>
+                                </tr>
+                            <?php endif; ?>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
 
+
+            <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
 </body>
+
 </html>

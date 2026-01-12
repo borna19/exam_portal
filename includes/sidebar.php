@@ -1,9 +1,8 @@
 <?php
-// $currentPage variable না থাকলে default set
+
 $currentPage = $currentPage ?? '';
 $isAdmin = isset($_SESSION['admin_id']);
 
-// logout link decide করবে
 $logoutLink = ($currentPage === 'dashboard')
     ? 'logout_to_index.php'
     : 'logout_to_dashboard.php';

@@ -1,108 +1,189 @@
-<?php
+<?php 
 session_start();
 include "includes/db.php";
-
 $msg = "";
-
-/* =====================
-   REGISTER
-===================== */
-if (isset($_POST['register'])) {
-    $name  = $_POST['name'];
-    $email = $_POST['email'];
-    $pass  = password_hash($_POST['password'], PASSWORD_DEFAULT);
-
-    $check = $conn->query("SELECT id FROM admins WHERE email='$email'");
-
-    if ($check->num_rows > 0) {
-        $msg = "Email already registered!";
-    } else {
-        $conn->query("INSERT INTO admins (name,email,password)
-                      VALUES ('$name','$email','$pass')");
-        $msg = "Registration successful. Now login.";
-    }
-}
 
 /* =====================
    LOGIN
 ===================== */
 if (isset($_POST['login'])) {
-    $email = $_POST['email'];
+    $email = trim($_POST['email']);
     $pass  = $_POST['password'];
 
-    $result = $conn->query("SELECT * FROM admins WHERE email='$email'");
+    $result = $conn->query("SELECT * FROM admins WHERE email='$email' LIMIT 1");
 
-    if ($result->num_rows == 1) {
+    if ($result && $result->num_rows === 1) {
         $row = $result->fetch_assoc();
 
         if (password_verify($pass, $row['password'])) {
+
+            // ✅ SET SESSION
             $_SESSION['admin_id']   = $row['id'];
             $_SESSION['admin_name'] = $row['name'];
 
-            // ✅ correct path
+            // ✅ REDIRECT (NO OUTPUT BEFORE THIS)
             header("Location: admin/dashboard.php");
             exit;
+
         } else {
             $msg = "Wrong password!";
         }
     } else {
-        $msg = "Account not found! Please register first.";
+        $msg = "Account not found!";
     }
 }
 ?>
 
-
-
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-    <title>Login / Register</title>
-    <style>
-        body{font-family:Arial;}
-        .box{width:300px;margin:50px auto;}
-        input,button{width:100%;padding:8px;margin:5px 0;}
-        .btns button{width:49%;}
-    </style>
+<meta charset="UTF-8">
+<title>Admin Login</title>
+
+<style>
+*{
+    margin:0;
+    padding:0;
+    box-sizing:border-box;
+    font-family: 'Segoe UI', sans-serif;
+}
+
+body{
+    background:#f4f6f9;
+    height:100vh;
+    display:flex;
+    justify-content:center;
+    align-items:center;
+}
+
+.auth-box{
+    width:380px;
+    background:#fff;
+    padding:30px;
+    border-radius:10px;
+    box-shadow:0 10px 30px rgba(0,0,0,0.1);
+}
+
+.auth-box h2{
+    text-align:center;
+    margin-bottom:20px;
+    color:#333;
+}
+
+/* Tabs */
+.tabs{
+    display:flex;
+    margin-bottom:20px;
+    border-bottom:2px solid #eee;
+}
+
+.tabs button{
+    flex:1;
+    padding:10px;
+    border:none;
+    background:none;
+    font-size:15px;
+    cursor:pointer;
+    color:#777;
+}
+
+.tabs button.active{
+    color:#007bff;
+    border-bottom:3px solid #007bff;
+    font-weight:600;
+}
+
+/* Forms */
+form{
+    display:none;
+}
+
+form.active{
+    display:block;
+}
+
+input{
+    width:100%;
+    padding:12px;
+    margin-bottom:12px;
+    border:1px solid #ccc;
+    border-radius:6px;
+    outline:none;
+    font-size:14px;
+}
+
+input:focus{
+    border-color:#007bff;
+}
+
+/* Button */
+.submit-btn{
+    width:100%;
+    padding:12px;
+    background:#007bff;
+    color:#fff;
+    border:none;
+    border-radius:6px;
+    font-size:15px;
+    cursor:pointer;
+}
+
+.submit-btn:hover{
+    background:#0056b3;
+}
+
+.msg{
+    margin-top:12px;
+    text-align:center;
+    color:red;
+    font-size:14px;
+}
+</style>
 </head>
+
 <body>
 
-<div class="box">
+<div class="auth-box">
     <h2>Admin Panel</h2>
 
-    <!-- BUTTONS -->
-    <div class="btns">
-        <button onclick="showLogin()">Login</button>
-        <button onclick="showRegister()">Register</button>
+    <div class="tabs">
+        <button id="loginTab" class="active" onclick="showLogin()">Login</button>
+        <button id="registerTab" onclick="showRegister()">Register</button>
     </div>
 
-    <!-- LOGIN FORM -->
-    <form method="POST" id="loginForm">
-        <h3>Login</h3>
+    <!-- LOGIN -->
+    <form method="POST" id="loginForm" class="active">
         <input type="email" name="email" placeholder="Email" required>
         <input type="password" name="password" placeholder="Password" required>
-        <button name="login">Login</button>
+        <button class="submit-btn" name="login">Login</button>
     </form>
 
-    <!-- REGISTER FORM -->
-    <form method="POST" id="registerForm" style="display:none;">
-        <h3>Register</h3>
+    <!-- REGISTER -->
+    <form method="POST" id="registerForm">
         <input type="text" name="name" placeholder="Name" required>
         <input type="email" name="email" placeholder="Email" required>
         <input type="password" name="password" placeholder="Password" required>
-        <button name="register">Register</button>
+        <button class="submit-btn" name="register">Register</button>
     </form>
+<?php if(!empty($msg)): ?>
+    <div class="msg"><?php echo $msg; ?></div>
+<?php endif; ?>
 
-    <p style="color:red;"><?php echo $msg; ?></p>
 </div>
 
 <script>
 function showLogin(){
-    document.getElementById("loginForm").style.display="block";
-    document.getElementById("registerForm").style.display="none";
+    loginForm.classList.add("active");
+    registerForm.classList.remove("active");
+    loginTab.classList.add("active");
+    registerTab.classList.remove("active");
 }
+
 function showRegister(){
-    document.getElementById("loginForm").style.display="none";
-    document.getElementById("registerForm").style.display="block";
+    registerForm.classList.add("active");
+    loginForm.classList.remove("active");
+    registerTab.classList.add("active");
+    loginTab.classList.remove("active");
 }
 </script>
 

@@ -1,265 +1,276 @@
 <?php
 session_start();
-include "../includes/db.php";
+include '../includes/db.php';
 
-/* =====================
-   ADMIN AUTH CHECK
-===================== */
 if (!isset($_SESSION['admin_id'])) {
     header("Location: ../index.php");
     exit;
 }
 
-/* =====================
-   DELETE EXAM
-===================== */
-$msg = "";
+/* ================= CREATE EXAM ================= */
+$successMsg = "";
+$errorMsg = "";
+
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['create_exam'])) {
+
+    $title = $_POST['title'];
+    $desc  = $_POST['description'];
+    $duration = (int)$_POST['duration'];
+    $questions = $_POST['questions'] ?? [];
+
+    $stmt = $conn->prepare("INSERT INTO exams (title, description, duration_minutes) VALUES (?, ?, ?)");
+    $stmt->bind_param("ssi", $title, $desc, $duration);
+
+    if ($stmt->execute()) {
+        $exam_id = $stmt->insert_id;
+
+        $link = $conn->prepare("INSERT INTO exam_questions (exam_id, question_id) VALUES (?, ?)");
+        foreach ($questions as $qid) {
+            $link->bind_param("ii", $exam_id, $qid);
+            $link->execute();
+        }
+
+        $successMsg = "Exam created successfully!";
+    } else {
+        $errorMsg = "Something went wrong!";
+    }
+}
+
+/* ================= DELETE EXAM ================= */
 if (isset($_POST['delete_exam'])) {
     $id = (int)$_POST['delete_id'];
     $conn->query("DELETE FROM exams WHERE id=$id");
-    $msg = "Exam deleted successfully!";
 }
 
-/* =====================
-   ADD EXAM
-===================== */
-if (isset($_POST['add_exam'])) {
-    $exam_name = trim($_POST['exam_name']);
-    $duration  = (int)$_POST['duration'];
-
-    if ($exam_name && $duration) {
-        $conn->query("INSERT INTO exams (exam_name, duration)
-                      VALUES ('$exam_name','$duration')");
-        $msg = "Exam added successfully!";
-    }
-}
-
-/* =====================
-   UPDATE EXAM
-===================== */
-if (isset($_POST['update_exam'])) {
-    $id = (int)$_POST['exam_id'];
-    $exam_name = trim($_POST['exam_name']);
-    $duration  = (int)$_POST['duration'];
-
-    if ($id && $exam_name && $duration) {
-        $stmt = $conn->prepare("UPDATE exams SET exam_name=?, duration=? WHERE id=?");
-        $stmt->bind_param("sii", $exam_name, $duration, $id);
-        $stmt->execute();
-        $stmt->close();
-        $msg = "Exam updated successfully!";
-    }
-}
-
-/* =====================
-   FETCH EXAMS
-===================== */
-$exams = [];
-$result = $conn->query("SELECT * FROM exams ORDER BY id DESC");
-while ($row = $result->fetch_assoc()) {
-    $exams[] = $row;
-}
-$totalExams = count($exams);
+/* ================= FETCH DATA ================= */
+$exams = $conn->query("SELECT * FROM exams ORDER BY id DESC");
+$allQuestions = $conn->query("SELECT id, question FROM questions ORDER BY id DESC");
 ?>
 
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-    <title>Manage Exams</title>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+<meta charset="UTF-8">
+<title>Manage Exams</title>
+<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
 
-    <style>
-        body {
-            background:#f4f6f9;
-        }
-        .main {
-            margin-left:220px;
-            padding:25px;
-        }
-        .card {
-            border-radius:14px;
-        }
-        .table th {
-            background:#f8f9fa;
-        }
+<style>
+body{
+    margin:0;
+    background:#f4f6f9;
+    font-family:'Segoe UI',sans-serif;
+}
 
-        /* 🔥 Row Highlight */
-        .table tbody tr {
-            transition: all .25s ease;
-        }
-        .table tbody tr:hover {
-            background:#f1f5ff;
-            transform: scale(1.01);
-        }
+/* Layout */
+.wrapper{
+    display:flex;
+    min-height:100vh;
+}
 
-        /* 🔥 Button Glow */
-        .btn-outline-primary:hover {
-            box-shadow:0 0 8px rgba(13,110,253,.4);
-        }
-        .btn-outline-danger:hover {
-            box-shadow:0 0 8px rgba(220,53,69,.4);
-        }
+/* Main Content after sidebar */
+.main-content{
+    margin-left:220px;
+    padding:30px;
+    width:calc(100% - 220px);
+}
 
-        /* 🔥 Search Focus */
-        #searchExam:focus {
-            border-color:#0d6efd;
-            box-shadow:0 0 6px rgba(13,110,253,.25);
-        }
+/* Cards */
+.card{
+    border-radius:14px;
+    box-shadow:0 10px 25px rgba(0,0,0,0.08);
+    padding:25px;
+    margin-bottom:25px;
+}
 
-        /* 🔥 Gradient Card */
-        .bg-gradient {
-            background:linear-gradient(135deg,#e3f2fd,#ffffff);
-        }
-    </style>
+/* Question box */
+.question-box{
+    max-height:260px;
+    overflow-y:auto;
+    border:1px solid #ddd;
+    padding:12px;
+    border-radius:10px;
+    background:#fafafa;
+}
+
+/* Table */
+.table{
+    background:#fff;
+    border-radius:12px;
+    overflow:hidden;
+}
+.table thead{
+    background:#2e7d32;
+    color:#fff;
+}
+.table tbody tr:hover{
+    background:#f1f8f5;
+}
+
+/* Buttons */
+.btn-sm{
+    border-radius:8px;
+}
+
+/* Mobile */
+@media(max-width:768px){
+    .main-content{
+        margin-left:0;
+        width:100%;
+    }
+}
+</style>
 </head>
+
 <body>
 
-<?php include "../includes/sidebar.php"; ?>
+<div class="wrapper">
 
-<div class="main">
+    <!-- SIDEBAR -->
+    <?php include '../includes/sidebar.php'; ?>
 
-    <!-- PAGE HEADER -->
-    <div class="d-flex justify-content-between align-items-center mb-4">
-        <h4 class="fw-bold">📘 Manage Exams</h4>
-        <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#addExam">
-            + Add Exam
-        </button>
-    </div>
+    <!-- MAIN CONTENT -->
+    <div class="main-content">
 
-    <?php if($msg): ?>
-        <div class="alert alert-success"><?= $msg ?></div>
-    <?php endif; ?>
+        <!-- CREATE EXAM -->
+        <div class="card">
+            <h4>Create New Exam</h4>
 
-    <!-- SUMMARY CARD -->
-    <div class="row mb-4">
-        <div class="col-md-4">
-            <div class="card p-3 text-center shadow-sm bg-gradient">
-                <h6 class="text-muted">Total Exams</h6>
-                <h2 class="fw-bold text-primary"><?= $totalExams ?></h2>
-            </div>
+            <?php if($successMsg): ?>
+                <div class="alert alert-success"><?= $successMsg ?></div>
+            <?php endif; ?>
+
+            <?php if($errorMsg): ?>
+                <div class="alert alert-danger"><?= $errorMsg ?></div>
+            <?php endif; ?>
+
+            <form method="post">
+                <div class="row g-3">
+
+                    <div class="col-md-6">
+                        <label>Exam Title</label>
+                        <input type="text" name="title" class="form-control" required>
+                    </div>
+
+                    <div class="col-md-6">
+                        <label>Duration (minutes)</label>
+                        <input type="number" name="duration" class="form-control" value="30" required>
+                    </div>
+
+                    <div class="col-12">
+                        <label>Description</label>
+                        <textarea name="description" class="form-control"></textarea>
+                    </div>
+
+                    <div class="col-12">
+                        <label>Select Questions</label>
+                        <div class="question-box">
+                            <?php while($q = $allQuestions->fetch_assoc()): ?>
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" name="questions[]" value="<?= $q['id'] ?>">
+                                    <label class="form-check-label">
+                                        <?= htmlspecialchars($q['question']) ?>
+                                    </label>
+                                </div>
+                            <?php endwhile; ?>
+                        </div>
+                    </div>
+
+                </div>
+
+                <button class="btn btn-success mt-3" name="create_exam">
+                    Create Exam
+                </button>
+            </form>
         </div>
-    </div>
 
-    <!-- SEARCH -->
-    <input type="text" id="searchExam" class="form-control mb-3"
-           placeholder="🔍 Search exam...">
+        <!-- EXAM LIST -->
+        <div class="card">
+            <h4>Existing Exams</h4>
 
-    <!-- TABLE -->
-    <div class="card shadow-sm">
-        <div class="card-body">
             <table class="table table-bordered align-middle">
                 <thead>
                     <tr>
-                        <th width="60">ID</th>
-                        <th>Exam Name</th>
-                        <th width="150">Duration</th>
-                        <th width="160">Action</th>
+                        <th>Title</th>
+                        <th>Description</th>
+                        <th>Duration</th>
+                        <th width="220">Actions</th>
                     </tr>
                 </thead>
+
                 <tbody>
-                <?php foreach ($exams as $row): ?>
+                <?php while($e = $exams->fetch_assoc()): ?>
                     <tr>
-                        <td><?= $row['id'] ?></td>
+                        <td><?= htmlspecialchars($e['title']) ?></td>
+                        <td><?= htmlspecialchars($e['description']) ?></td>
+                        <td><?= $e['duration_minutes'] ?> min</td>
 
-                        <!-- 🔥 Exam Name Highlight -->
-                        <td class="fw-semibold text-primary">
-                            <?= htmlspecialchars($row['exam_name']) ?>
-                        </td>
+                        <td class="d-flex gap-2">
 
-                        <!-- 🔥 Duration Badge -->
-                        <td>
-                            <span class="badge bg-info text-dark px-3 py-2">
-                                <?= $row['duration'] ?> min
-                            </span>
-                        </td>
-
-                        <td>
-                            <button class="btn btn-sm btn-outline-primary"
+                            <!-- EDIT -->
+                            <button class="btn btn-warning btn-sm"
                                     data-bs-toggle="modal"
-                                    data-bs-target="#edit<?= $row['id'] ?>">
-                                ✏ Edit
+                                    data-bs-target="#edit<?= $e['id'] ?>">
+                                Edit
                             </button>
 
-                            <form method="POST" class="d-inline">
-                                <input type="hidden" name="delete_id" value="<?= $row['id'] ?>">
-                                <button type="submit" name="delete_exam"
-                                        onclick="return confirm('Delete this exam?')"
-                                        class="btn btn-sm btn-outline-danger">
-                                    🗑
+                            <!-- VIEW -->
+                            <button class="btn btn-info btn-sm"
+                                    data-bs-toggle="modal"
+                                    data-bs-target="#view<?= $e['id'] ?>">
+                                View
+                            </button>
+
+                            <!-- DELETE -->
+                            <form method="post" onsubmit="return confirm('Delete this exam?')">
+                                <input type="hidden" name="delete_id" value="<?= $e['id'] ?>">
+                                <button class="btn btn-danger btn-sm" name="delete_exam">
+                                    Delete
                                 </button>
                             </form>
+
                         </td>
                     </tr>
-                <?php endforeach; ?>
+
+                    <!-- VIEW MODAL -->
+                    <div class="modal fade" id="view<?= $e['id'] ?>">
+                        <div class="modal-dialog modal-lg">
+                            <div class="modal-content">
+                                <div class="modal-header">
+                                    <h5>Questions - <?= htmlspecialchars($e['title']) ?></h5>
+                                    <button class="btn-close" data-bs-dismiss="modal"></button>
+                                </div>
+                                <div class="modal-body">
+                                    <?php
+                                    $qs = $conn->query("
+                                        SELECT q.question
+                                        FROM questions q
+                                        JOIN exam_questions eq ON eq.question_id=q.id
+                                        WHERE eq.exam_id=".$e['id']
+                                    );
+
+                                    if($qs->num_rows){
+                                        echo "<ol>";
+                                        while($row=$qs->fetch_assoc()){
+                                            echo "<li>{$row['question']}</li>";
+                                        }
+                                        echo "</ol>";
+                                    } else {
+                                        echo "<p>No questions found.</p>";
+                                    }
+                                    ?>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                <?php endwhile; ?>
                 </tbody>
             </table>
         </div>
+
     </div>
 </div>
 
-<!-- ADD MODAL -->
-<div class="modal fade" id="addExam">
-  <div class="modal-dialog">
-    <div class="modal-content">
-      <form method="POST">
-        <div class="modal-header">
-          <h5>Add New Exam</h5>
-          <button class="btn-close" data-bs-dismiss="modal"></button>
-        </div>
-        <div class="modal-body">
-          <input type="text" name="exam_name" class="form-control mb-2"
-                 placeholder="Exam Name" required>
-          <input type="number" name="duration" class="form-control"
-                 placeholder="Duration (minutes)" required>
-        </div>
-        <div class="modal-footer">
-          <button type="submit" name="add_exam" class="btn btn-success">
-            Save
-          </button>
-        </div>
-      </form>
-    </div>
-  </div>
-</div>
-
-<!-- EDIT MODALS -->
-<?php foreach ($exams as $row): ?>
-<div class="modal fade" id="edit<?= $row['id'] ?>">
-  <div class="modal-dialog">
-    <div class="modal-content">
-      <form method="POST">
-        <div class="modal-header">
-          <h5>Edit Exam</h5>
-          <button class="btn-close" data-bs-dismiss="modal"></button>
-        </div>
-        <div class="modal-body">
-          <input type="hidden" name="exam_id" value="<?= $row['id'] ?>">
-          <input type="text" name="exam_name" class="form-control mb-2"
-                 value="<?= htmlspecialchars($row['exam_name']) ?>" required>
-          <input type="number" name="duration" class="form-control"
-                 value="<?= $row['duration'] ?>" required>
-        </div>
-        <div class="modal-footer">
-          <button type="submit" name="update_exam" class="btn btn-primary">
-            Update
-          </button>
-        </div>
-      </form>
-    </div>
-  </div>
-</div>
-<?php endforeach; ?>
-
-<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
-
-<script>
-document.getElementById('searchExam').addEventListener('keyup', function(){
-    let value = this.value.toLowerCase();
-    document.querySelectorAll('tbody tr').forEach(row=>{
-        row.style.display = row.innerText.toLowerCase().includes(value) ? '' : 'none';
-    });
-});
-</script>
-
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
 </body>
 </html>
