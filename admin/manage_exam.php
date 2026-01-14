@@ -1,6 +1,7 @@
 <?php
 session_start();
 include '../includes/db.php';
+require_once '../includes/send_exam_mail.php';
 
 if (!isset($_SESSION['admin_id'])) {
     header("Location: ../index.php");
@@ -23,10 +24,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['create_exam'])) {
         $errorMsg = "Please select at least one question.";
     } else {
 
-        $token = bin2hex(random_bytes(16)); // secure exam token
+        $token = bin2hex(random_bytes(16));
 
         $stmt = $conn->prepare(
-            "INSERT INTO exams (title, description, duration_minutes, token) 
+            "INSERT INTO exams (title, description, duration_minutes, token)
              VALUES (?, ?, ?, ?)"
         );
         $stmt->bind_param("ssis", $title, $desc, $duration, $token);
@@ -44,10 +45,24 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['create_exam'])) {
                 $link->execute();
             }
 
-            $examLink = "http://" . $_SERVER['HTTP_HOST'] .
-                "/exam_portal/pages/take_exam.php?token=" . $token;
+            $examLink = "http://localhost/exam_portal/pages/take_exam.php?token=" . $token;
 
-            $successMsg = "Exam created successfully!";
+
+            /* ================= SEND MAIL TO ALL STUDENTS ================= */
+
+            $students = $conn->query("SELECT name, email FROM students");
+
+            while ($s = $students->fetch_assoc()) {
+                sendExamMail(
+                    $s['email'],
+                    $s['name'],
+                    $title,
+                    $examLink
+                );
+                sleep(1); // prevent gmail blocking
+            }
+
+            $successMsg = "Exam created & mail sent to all students!";
         } else {
             $errorMsg = "Something went wrong!";
         }
@@ -65,6 +80,7 @@ if (isset($_POST['delete_exam'])) {
 $exams = $conn->query("SELECT * FROM exams ORDER BY id DESC");
 $allQuestions = $conn->query("SELECT id, question FROM questions ORDER BY id DESC");
 ?>
+
 
 <!DOCTYPE html>
 <html lang="en">
